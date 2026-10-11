@@ -2,7 +2,7 @@
 // Jede Puzzle-Nummer ist eine beliebig große ganze Zahl (BigInt).
 
 import { generateAbstract, generatePattern, STYLES, PATTERNS } from './core/generate.js';
-import { maskFromJson, maskToJson } from './core/mask.js';
+import { maskFromJson, maskToJson, unpackBits } from './core/mask.js';
 
 export const PROC = [
   { id: 'zufall', name: 'Zufall', icon: '🎲', group: 'abstract', style: 'frei', desc: STYLES.frei.desc },
@@ -15,6 +15,40 @@ export const PROC = [
 ];
 
 const CUSTOM_KEY = 'tangram.custom.v1';
+
+/**
+ * Prüft ein Paket aus unsicherer Quelle (Import / localStorage) streng und gibt eine bereinigte Kopie zurück.
+ * Wirft bei ungültigen Paketen. Ungültige Figuren/Lösungen werden still verworfen.
+ */
+export function validatePack(p) {
+  if (!p || p.format !== 'tangram-pack/1' || !Array.isArray(p.figures)) throw new Error('Kein gültiges Tangram-Paket');
+  const num = (x) => typeof x === 'number' && Number.isFinite(x);
+  const figures = [];
+  for (const f of p.figures.slice(0, 2000)) {
+    const m = f && f.mask;
+    if (!m || !Number.isInteger(m.w) || !Number.isInteger(m.h) || m.w < 1 || m.h < 1 || m.w > 400 || m.h > 400
+      || !num(m.c) || m.c <= 0 || m.c > 5 || typeof m.bits !== 'string' || m.bits.length > 120000 || !/^[A-Za-z0-9+/=]*$/.test(m.bits)) continue;
+    const bits = unpackBits(m.bits, m.w * m.h);
+    let ones = 0;
+    for (const b of bits) ones += b;
+    if (ones < 30 || bits.some((b) => b !== 0 && b !== 1)) continue;
+    const okPl = (q) => Array.isArray(q) && q.length === 5 && Number.isInteger(q[0]) && q[0] >= 0 && q[0] <= 4
+      && Number.isInteger(q[1]) && q[1] >= 0 && q[1] < 8 && (q[2] === 0 || q[2] === 1) && num(q[3]) && num(q[4]);
+    const sols = (Array.isArray(f.sols) ? f.sols : [])
+      .filter((s) => s && num(s.iou) && Array.isArray(s.p) && s.p.length >= 1 && s.p.length <= 200 && s.p.every(okPl))
+      .slice(0, 50).map((s) => ({ iou: s.iou, p: s.p.map((q) => q.slice()) }));
+    figures.push({
+      id: String(f.id ?? '').slice(0, 80) || `f${figures.length}`,
+      name: String(f.name ?? '').slice(0, 80), glyph: String(f.glyph ?? '').slice(0, 16),
+      mask: { w: m.w, h: m.h, c: m.c, bits: m.bits }, sols,
+    });
+  }
+  if (!figures.length) throw new Error('Das Paket enthält keine gültigen Formen');
+  return {
+    format: 'tangram-pack/1', id: String(p.id || 'paket').replace(/[^\w\-äöüß]/gi, '-').slice(0, 60),
+    name: String(p.name || 'Paket').slice(0, 60), icon: String(p.icon || '⭐').slice(0, 8), figures,
+  };
+}
 
 export function parseIndex(text) {
   const digits = String(text).replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
@@ -55,7 +89,8 @@ export class Service {
   #loadCustom() {
     try {
       const raw = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]');
-      this.custom = raw.map((p) => this.#prepPack(p));
+      this.custom = [];
+      for (const p of raw) { try { this.custom.push(this.#prepPack(validatePack(p))); } catch { /* ungültig: verwerfen */ } }
     } catch { this.custom = []; }
   }
   saveCustom() {

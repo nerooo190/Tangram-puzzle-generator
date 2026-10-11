@@ -1,4 +1,4 @@
-import { Service, parseIndex, fmt } from './data.js';
+import { Service, parseIndex, fmt, validatePack } from './data.js';
 import { Board, COLORS } from './board.js';
 import { placementVerts, bbox } from './core/geom.js';
 import { glyphToMask, splitGlyphs } from './glyph.js';
@@ -161,7 +161,8 @@ async function renderGallery() {
     const n = start + BigInt(i);
     const d = document.createElement('button');
     d.className = 'thumb' + (n === state.n ? ' cur' : '');
-    d.innerHTML = `<div class="ph">${cat.figures ? cat.figures[Number(n % BigInt(cat.figures.length))].glyph : '…'}</div><div class="lbl"></div>`;
+    d.innerHTML = '<div class="ph"></div><div class="lbl"></div>';
+    d.querySelector('.ph').textContent = cat.figures ? cat.figures[Number(n % BigInt(cat.figures.length))].glyph : '…';
     d.querySelector('.lbl').textContent = `Nr. ${fmt(n)}`;
     d.addEventListener('click', () => { toggleGallery(false); go(n); });
     grid.appendChild(d); cells.push([n, d]);
@@ -250,11 +251,10 @@ async function exportCategory() {
 
 async function importPack(file) {
   try {
-    const pack = JSON.parse(await file.text());
-    if (pack.format !== 'tangram-pack/1' || !Array.isArray(pack.figures) || !pack.figures.length) throw new Error('Kein gültiges Tangram-Paket');
-    if (!pack.figures.every((f) => f.mask && f.mask.bits)) throw new Error('Paket enthält keine Masken');
+    if (file.size > 20 * 1024 * 1024) throw new Error('Datei zu groß');
+    const pack = validatePack(JSON.parse(await file.text()));
     const id = service.categories().some((c) => c.id === pack.id && !c.custom) ? `imp-${pack.id}` : pack.id;
-    service.addCustom({ ...pack, id, icon: pack.icon || '⭐' });
+    service.addCustom({ ...pack, id });
     selectCategory(id, 0n);
   } catch (e) { alert(`Import fehlgeschlagen: ${e.message}`); }
 }

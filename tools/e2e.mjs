@@ -166,6 +166,26 @@ ok(await page.locator('#board .piece').count() === 7, 'Eigene Kategorie erzeugt 
 ok((await page.evaluate(() => window.__tangram.state.cat.figures.length)) === 3, 'Drei eigene Formen gerastert');
 await snap('09-custom');
 
+// Import: bösartiges Paket (HTML im Glyph) darf nichts ausführen, kaputte Pakete werden abgelehnt
+{
+  const good = await page.evaluate(() => {
+    const f = window.__tangram.service.category('tiere').figures[0];
+    return { format: 'tangram-pack/1', id: 'evil', name: 'Evil <b>x</b>', icon: '⭐', figures: [{ id: 'e1', name: '<i>n</i>', glyph: '<img src=x onerror="window.__xss=1">', mask: f.mask, sols: f.sols.slice(0, 1) }] };
+  });
+  await page.setInputFiles('#importFile', { name: 'evil.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(good)) });
+  await page.waitForFunction(() => window.__tangram.state.cat.id === 'evil', null, { timeout: 5000 });
+  await page.click('#galBtn');
+  await page.waitForTimeout(600);
+  ok(await page.evaluate(() => window.__xss === undefined) && await page.locator('#galGrid img').count() === 0, 'Import: HTML im Glyph wird nicht ausgeführt');
+  await page.click('#galBtn');
+  let alerted = false;
+  page.once('dialog', (d) => { alerted = true; d.accept(); });
+  const bad = { format: 'tangram-pack/1', id: 'bad', name: 'bad', figures: [{ id: 'b', name: 'b', glyph: 'b', mask: { w: 100000, h: 100000, c: 1, bits: 'AAAA' } }] };
+  await page.setInputFiles('#importFile', { name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
+  await page.waitForTimeout(500);
+  ok(alerted && (await page.evaluate(() => window.__tangram.service.category('bad'))) === undefined, 'Import: ungültiges Paket wird abgelehnt');
+}
+
 // Mobil
 await page.setViewportSize({ width: 390, height: 780 });
 await page.evaluate(() => window.__tangram.selectCategory('fahrzeuge', 2n));

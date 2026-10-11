@@ -55,37 +55,68 @@ func load_user_packs(dir: String = USER_DIR) -> void:
 	for f in d.get_files():
 		if f.ends_with(".json"):
 			var p = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join(f)))
-			if p is Dictionary and p.get("format", "") == "tangram-pack/1":
+			if is_valid_pack(p):
 				user_packs.append(p)
 
 
+## Prüft ein Paket grob auf Gültigkeit (Format, Masken, Platzierungen), bevor es verwendet wird.
+static func is_valid_pack(p) -> bool:
+	if not (p is Dictionary) or p.get("format", "") != "tangram-pack/1" or not (p.get("figures") is Array):
+		return false
+	if p["figures"].is_empty() or not (p.get("id") is String) or not (p.get("name") is String):
+		return false
+	for f in p["figures"]:
+		if not (f is Dictionary) or not (f.get("mask") is Dictionary) or not (f.get("name") is String):
+			return false
+		var m: Dictionary = f["mask"]
+		if not (m.get("w") is float or m.get("w") is int) or not (m.get("h") is float or m.get("h") is int):
+			return false
+		if int(m["w"]) < 1 or int(m["h"]) < 1 or int(m["w"]) > 400 or int(m["h"]) > 400:
+			return false
+		if not (m.get("c") is float) or float(m["c"]) <= 0.0 or not (m.get("bits") is String):
+			return false
+		if Marshalls.base64_to_raw(m["bits"]).size() * 8 < int(m["w"]) * int(m["h"]):
+			return false
+		for s in f.get("sols", []):
+			if not (s is Dictionary) or not (s.get("p") is Array) or s["p"].is_empty():
+				return false
+			for q in s["p"]:
+				if not (q is Array) or q.size() != 5 or int(q[0]) < 0 or int(q[0]) > 4 or int(q[1]) < 0 or int(q[1]) > 7:
+					return false
+	return true
+
+
 ## Fügt ein Paket hinzu (z. B. aus der Web-App exportiert) und speichert es unter user://.
-func add_user_pack(pack: Dictionary, save: bool = true) -> void:
+func add_user_pack(pack: Dictionary, save: bool = true) -> bool:
+	if not is_valid_pack(pack):
+		push_warning("TangramLibrary: ungültiges Paket verworfen")
+		return false
 	for i in user_packs.size():
 		if user_packs[i]["id"] == pack["id"]:
 			user_packs[i] = pack
 			_cache.clear()
 			if save:
 				_save_pack(pack)
-			return
+			return true
 	user_packs.append(pack)
 	if save:
 		_save_pack(pack)
+	return true
 
 
 func _save_pack(pack: Dictionary) -> void:
 	DirAccess.make_dir_recursive_absolute(USER_DIR)
-	var f := FileAccess.open(USER_DIR.path_join("%s.json" % pack["id"]), FileAccess.WRITE)
+	var safe_id := String(pack["id"]).validate_filename()
+	var f := FileAccess.open(USER_DIR.path_join("%s.json" % safe_id), FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(pack))
 
 
 func add_pack_from_file(path: String) -> bool:
 	var p = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if not (p is Dictionary) or p.get("format", "") != "tangram-pack/1" or not p.has("figures"):
+	if not is_valid_pack(p):
 		return false
-	add_user_pack(p)
-	return true
+	return add_user_pack(p)
 
 
 ## Alle Kategorien: [{id,name,icon,group,figures?,count?}]

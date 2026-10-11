@@ -40,5 +40,12 @@ func _init() -> void:
 	var fig: Dictionary = cat["figures"][5]
 	var sols := TangramFit.solve(TangramFit.mask_from_json(fig["mask"]), {"sets": 1, "seed": "x", "restarts": 1, "iters": 800, "topK": 1})
 	check(sols.size() == 1 and sols[0]["pls"].size() == 7 and sols[0]["iou"] > 0.5, "Solver liefert Lösung (IoU %.2f)" % sols[0]["iou"])
+	# Paket-Validierung
+	var good := {"format": "tangram-pack/1", "id": "t", "name": "T", "figures": [{"id": "a", "name": "A", "glyph": "A", "mask": cat["figures"][0]["mask"], "sols": [cat["figures"][0]["sols"][0]]}]}
+	check(TangramLibrary.is_valid_pack(good), "gültiges Paket wird akzeptiert")
+	var bad1 := {"format": "x", "id": "t", "name": "T", "figures": []}
+	var bad2 := {"format": "tangram-pack/1", "id": "t", "name": "T", "figures": [{"id": "a", "name": "A", "mask": {"w": 100000, "h": 100000, "c": 1.0, "bits": "AAAA"}}]}
+	var bad3 := {"format": "tangram-pack/1", "id": "t", "name": "T", "figures": [{"id": "a", "name": "A", "mask": cat["figures"][0]["mask"], "sols": [{"iou": 0.5, "p": [[9, 0, 0, 0.0, 0.0]]}]}]}
+	check(not TangramLibrary.is_valid_pack(bad1) and not TangramLibrary.is_valid_pack(bad2) and not TangramLibrary.is_valid_pack(bad3) and not TangramLibrary.is_valid_pack(null), "ungültige Pakete werden abgelehnt")
 	print("FAILS=", fails)
 	quit(1 if fails > 0 else 0)
