@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tangram-Generator</title>
+  <meta name="description" content="Unbegrenzt viele Tangram-Rätsel: Tiere, Essen, Fahrzeuge, Buchstaben, Muster und eigene Formen.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='5,5 55,5 5,55' fill='%23ffb703'/%3E%3Cpolygon points='95,5 95,55 45,55' fill='%2306b6d4'/%3E%3Cpolygon points='5,95 5,60 40,95' fill='%23ef476f'/%3E%3Crect x='50' y='62' width='30' height='30' fill='%238ac926'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <button id="menuBtn" class="icon-btn only-mobile" aria-label="Kategorien öffnen">☰</button>
+    <h1><span class="logo" aria-hidden="true"></span>Tangram-Generator</h1>
+    <div class="top-right">
+      <span id="solvedCount" class="chip" title="Gelöste Puzzles">✓ 0</span>
+      <button id="helpBtn" class="icon-btn" aria-label="Hilfe">?</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside id="side" class="side" aria-label="Kategorien">
+      <div class="side-head">
+        <input id="catSearch" type="search" placeholder="Kategorie suchen…" aria-label="Kategorie suchen">
+      </div>
+      <nav id="catList" class="cat-list"></nav>
+      <div class="side-foot">
+        <button id="newCatBtn" class="btn wide">＋ Eigene Kategorie</button>
+        <button id="importBtn" class="btn wide ghost">⇪ Paket importieren</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </div>
+    </aside>
+    <div id="scrim" class="scrim" hidden></div>
+
+    <main class="main">
+      <section class="titlebar">
+        <div class="titles">
+          <div class="cat-line"><span id="catIcon"></span> <span id="catName"></span></div>
+          <h2 id="pzTitle">…</h2>
+          <div id="pzSub" class="sub"></div>
+        </div>
+        <div id="hintGlyph" class="hint-glyph" title="So sieht die Form aus" aria-hidden="true"></div>
+      </section>
+
+      <section class="nav" aria-label="Puzzle wählen">
+        <button id="firstBtn" class="btn sq" title="Zum Anfang (Nr. 0)">⏮</button>
+        <button id="prevBtn" class="btn sq" title="Vorheriges Puzzle">◀</button>
+        <label class="num"><span>Nr.</span><input id="numInput" inputmode="numeric" autocomplete="off" aria-label="Puzzle-Nummer"></label>
+        <button id="nextBtn" class="btn sq" title="Nächstes Puzzle">▶</button>
+        <button id="randBtn" class="btn" title="Zufällige Nummer bis 10²¹">🎲 Zufall</button>
+        <button id="bigBtn" class="btn ghost" title="Springe zu Nummer 1.000.000.000.000.000.000.000">10²¹</button>
+        <label class="sets" id="setsWrap" title="Anzahl Tangram-Sätze (7 Teile pro Satz)">Teile
+          <select id="setsSel">
+            <option value="1">7</option><option value="2">14</option><option value="3">21</option><option value="4">28</option>
+          </select>
+        </label>
+        <button id="galBtn" class="btn ghost" aria-pressed="false">▦ Galerie</button>
+      </section>
+
+      <section id="playView" class="play">
+        <div class="board-wrap">
+          <svg id="board" class="board" role="application" aria-label="Tangram-Spielfeld" tabindex="0"></svg>
+          <div id="loading" class="loading" hidden><div class="spin"></div><span>Berechne Variante…</span></div>
+          <div id="win" class="win" hidden>
+            <div class="win-card">
+              <div class="confetti" aria-hidden="true">🎉</div>
+              <h3>Geschafft!</h3>
+              <p id="winText"></p>
+              <div class="row"><button id="winNext" class="btn primary">Nächstes Puzzle ▶</button><button id="winClose" class="btn ghost">Ansehen</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="toolbar" role="toolbar" aria-label="Werkzeuge">
+          <button id="rotL" class="btn sq" title="Drehen −45° (Shift+R)" disabled>↺</button>
+          <button id="rotR" class="btn sq" title="Drehen +45° (R, Doppelklick, Mausrad)" disabled>↻</button>
+          <button id="flipBtn" class="btn sq" title="Spiegeln (F)" disabled>⇋</button>
+          <span class="sep"></span>
+          <button id="hintBtn" class="btn">💡 Tipp</button>
+          <button id="shuffleBtn" class="btn ghost">🔀 Neu mischen</button>
+          <button id="solveBtn" class="btn ghost">👁 Lösung</button>
+          <span class="grow"></span>
+          <span id="progress" class="chip" title="Fläche gedeckt">0 %</span>
+          <span id="timer" class="chip" title="Zeit">0:00</span>
+        </div>
+      </section>
+
+      <section id="galView" class="gallery" hidden>
+        <div class="gal-head">
+          <button id="galPrev" class="btn sq">◀</button>
+          <span id="galRange"></span>
+          <button id="galNext" class="btn sq">▶</button>
+        </div>
+        <div id="galGrid" class="gal-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="catDlg">
+    <form method="dialog" id="catForm">
+      <h3>Eigene Kategorie</h3>
+      <p class="muted">Gib beliebige Formen ein: Emojis (🦖 🍔 🚀), einzelne Buchstaben oder ganze Wörter. Jede Form wird zur Silhouette und bekommt unendlich viele Tangram-Varianten.</p>
+      <label>Name<input id="catNameInp" maxlength="40" placeholder="z. B. Dschungel" required></label>
+      <label>Symbol <small>(optional, ein Emoji)</small><input id="catIconInp" maxlength="8" placeholder="🌴"></label>
+      <label>Formen <small>(eine pro Zeile, mit Komma oder als Emoji-Kette)</small>
+        <textarea id="catGlyphs" rows="5" placeholder="🦁 🐍 🦜&#10;PALME&#10;🍌"></textarea></label>
+      <p id="catMsg" class="muted" role="status"></p>
+      <div class="row">
+        <button type="submit" id="catSave" class="btn primary">Speichern</button>
+        <button type="button" id="catCancel" class="btn ghost">Abbrechen</button>
+        <button type="button" id="catExport" class="btn ghost" hidden>⇩ Als Paket exportieren</button>
+        <button type="button" id="catDelete" class="btn danger" hidden>Löschen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDlg">
+    <form method="dialog">
+      <h3>So funktioniert's</h3>
+      <ul class="help">
+        <li><b>Ziehen</b>: Teile mit Maus/Finger verschieben – sie rasten an Ecken ein.</li>
+        <li><b>Drehen</b>: Doppelklick/Doppeltipp, Mausrad, <kbd>R</kbd> (Shift+R rückwärts) oder ↺ ↻ – in 45°-Schritten.</li>
+        <li><b>Spiegeln</b>: <kbd>F</kbd> oder ⇋ (nur beim Parallelogramm nötig).</li>
+        <li><b>Ziel</b>: Lege alle Teile ohne Überlappung genau in die dunkle Silhouette.</li>
+        <li><b>Nr.</b>: Jede Zahl – auch <code>1000000000000000000000</code> – ist ein eigenes Puzzle, Links lassen sich teilen.</li>
+        <li><b>Teile</b>: 14, 21 oder 28 Teile = mehrere Tangram-Sätze, für Profis.</li>
+        <li><b>Eigene Kategorie</b>: beliebige Emojis, Buchstaben oder Wörter eingeben.</li>
+      </ul>
+      <div class="row"><button class="btn primary">Verstanden</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
