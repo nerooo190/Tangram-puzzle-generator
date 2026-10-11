@@ -33,13 +33,24 @@ function buildOnce(rng, types, style) {
   if (TYPES[order[0]].chiral) placed[0].pl[2] = rng.int(2);
   placed[0].v = placementVerts(placed[0].pl);
   for (let i = 1; i < order.length; i++) {
-    let best = null, bestScore = -Infinity;
-    for (let k = 0; k < st.k; k++) {
-      const c = sampleAttach(placed, order[i], rng, 60);
-      if (!c) continue;
-      if (st.k === 1) { best = c; break; }
-      const s = score(st.mode, placed.map((p) => p.v).concat([c.v]));
-      if (s > bestScore) { bestScore = s; best = c; }
+    let best = null;
+    if (st.k === 1) {
+      best = sampleAttach(placed, order[i], rng, 60);
+    } else {
+      const cands = [];
+      for (let k = 0; k < st.k; k++) {
+        const c = sampleAttach(placed, order[i], rng, 60);
+        if (c) cands.push({ c, s: score(st.mode, placed.map((p) => p.v).concat([c.v])) });
+      }
+      // die drei besten Kandidaten (erster gewinnt bei Gleichstand), daraus zufällig wählen -> mehr Vielfalt
+      const ranked = [];
+      for (let r = 0; r < 3 && cands.length; r++) {
+        let bi = 0;
+        for (let j = 1; j < cands.length; j++) if (cands[j].s > cands[bi].s) bi = j;
+        ranked.push(cands[bi]);
+        cands.splice(bi, 1);
+      }
+      if (ranked.length) best = ranked[rng.int(ranked.length)].c;
     }
     if (!best) return null;
     placed.push({ pl: best.pl, v: best.v });
@@ -62,10 +73,11 @@ export function generateAbstract(seed, style = 'frei', sets = 1) {
 
 // ---- Muster (symmetrische Kompositionen) -------------------------------------------
 
+/** mult: Vervielfachung der Grundfigur (Teile = 7 * baseSets * mult). */
 export const PATTERNS = {
-  spiegel: { name: 'Spiegel', desc: 'Achsensymmetrisch (2 Sätze)', sets: 2 },
-  vier: { name: 'Kaleidoskop', desc: 'Vierfach gespiegelt (4 Sätze)', sets: 4 },
-  punkt: { name: 'Punktsymmetrie', desc: 'Um 180° gedreht (2 Sätze)', sets: 2 },
+  spiegel: { name: 'Spiegel', desc: 'Achsensymmetrisch', mult: 2 },
+  vier: { name: 'Kaleidoskop', desc: 'Vierfach gespiegelt', mult: 4 },
+  punkt: { name: 'Punktsymmetrie', desc: 'Um 180° gedreht', mult: 2 },
 };
 
 function mapAll(pls, k, m, ux, uy) { return pls.map((p) => mapPlacement(p, k, m, ux, uy)); }
@@ -80,9 +92,9 @@ function connected(polys) {
   return cnt === n;
 }
 
-export function generatePattern(seed, kind = 'spiegel') {
+/** baseSets: Sätze der Grundfigur (Spiegel/Punkt: 2x, Kaleidoskop: 4x so viele Teile). */
+export function generatePattern(seed, kind = 'spiegel', baseSets = 1) {
   const rng = new Rng(seed);
-  const baseSets = kind === 'vier' ? 1 : 1;
   const types = kitTypes(baseSets);
   const styleNames = ['frei', 'kompakt', 'lang'];
   for (let attempt = 0; attempt < 300; attempt++) {

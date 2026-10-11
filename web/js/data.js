@@ -103,8 +103,8 @@ export class Service {
       const pls = generateAbstract(`${cat.id}:${n}:${sets}`, cat.style, sets);
       if (pls) pz = this.#make(cat, n, sets, `${cat.name} Nr. ${fmt(n)}`, `${sets * 7} Teile`, '', pls, null);
     } else if (cat.group === 'pattern') {
-      const pls = generatePattern(`${cat.id}:${n}`, cat.pattern);
-      if (pls) pz = this.#make(cat, n, 1, `${cat.name} Nr. ${fmt(n)}`, `${pls.length} Teile`, '', pls, null);
+      const pls = generatePattern(`${cat.id}:${n}:${sets}`, cat.pattern, sets);
+      if (pls) pz = this.#make(cat, n, sets, `${cat.name} Nr. ${fmt(n)}`, `${pls.length} Teile`, '', pls, null);
     }
     if (pz) this.cache.set(key, pz);
     return pz;

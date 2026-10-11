@@ -102,4 +102,8 @@ for (const cat of catalog) {
   console.log(`${cat.id}: ${figures.length} Figuren, Ø beste IoU ${avg.toFixed(3)}`);
 }
 if (!only) fs.writeFileSync(path.join(outDir, 'index.json'), JSON.stringify(index));
+// dieselben Pakete für das Godot-Projekt
+const godotDir = path.resolve('godot/tangram/data/packs');
+fs.mkdirSync(godotDir, { recursive: true });
+for (const f of fs.readdirSync(outDir)) fs.copyFileSync(path.join(outDir, f), path.join(godotDir, f));
 console.log('fertig in', Math.round((Date.now() - t0) / 1000), 's');

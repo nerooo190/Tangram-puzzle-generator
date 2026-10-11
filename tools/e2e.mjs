@@ -93,12 +93,53 @@ await page.waitForTimeout(400);
 await page.evaluate(() => window.__tangram.selectCategory('essen', 5n));
 await page.waitForTimeout(300);
 const solved = await page.evaluate(() => {
-  const b = window.__tangram.board; let won = false; b.h.onSolved = () => { won = true; };
+  const b = window.__tangram.board;
   const cov0 = b.coverage();
   b.showSolution();
-  return { cov0, won, solved: b.solved };
+  return { cov0, solved: b.solved };
 });
 ok(solved.cov0.covered < 0.5 && solved.solved, 'Anfangs ungelöst, nach Platzierung gelöst');
+
+// Echter Spielpfad: alle Teile per Maus ungefähr an die richtige Stelle ziehen -> Einrasten -> gelöst
+for (const [catId, n] of [['tiere', 8n], ['kompakt', 99n], ['essen', 3n], ['buchstaben', 7n], ['zufall', 5n], ['lang', 12n], ['verzweigt', 31n], ['spiegel', 2n], ['natur', 20n]]) {
+  await page.evaluate(([c, nn]) => window.__tangram.selectCategory(c, BigInt(nn)), [catId, String(n)]);
+  await page.waitForTimeout(400);
+  const count = await page.evaluate(() => window.__tangram.board.pieces.length);
+  let wonByHand = false;
+  for (let k = 0; k < count; k++) {
+    const plan = await page.evaluate(async (k) => {
+      const g = await import('./js/core/geom.js');
+      const b = window.__tangram.board;
+      const sp = b.solPls[k];
+      const used = window.__used || (window.__used = new Set());
+      if (k === 0) used.clear();
+      const p = b.pieces.find((q) => q.type === sp[0] && !used.has(q));
+      used.add(p);
+      b.select(p);
+      const norm = (verts) => { const c = g.polyCentroid(verts); return verts.map((v) => `${Math.round((v[0] - c[0]) * 100)},${Math.round((v[1] - c[1]) * 100)}`).sort().join(';'); };
+      const want = norm(b.solPolys[k]);
+      for (let i = 0; i < 16; i++) {
+        if (norm(g.placementVerts(p.pl)) === want) break;
+        if (i === 8) b.flip(); else b.rotate(1);
+      }
+      const tc = g.polyCentroid(b.solPolys[k]), pc = g.polyCentroid(g.placementVerts(p.pl));
+      const svg = document.getElementById('board'), m = svg.getScreenCTM();
+      const toScreen = (c) => { const q = svg.createSVGPoint(); q.x = c[0]; q.y = c[1]; const r = q.matrixTransform(m); return [r.x, r.y]; };
+      return { from: toScreen(pc), to: toScreen([tc[0] + 0.12, tc[1] - 0.1]), match: norm(g.placementVerts(p.pl)) === want };
+    }, k);
+    if (!plan.match) { ok(false, `${catId}: Ausrichtung für Teil ${k} nicht gefunden`); break; }
+    await page.mouse.move(plan.from[0], plan.from[1]);
+    await page.mouse.down();
+    await page.mouse.move((plan.from[0] + plan.to[0]) / 2, (plan.from[1] + plan.to[1]) / 2, { steps: 3 });
+    await page.mouse.move(plan.to[0], plan.to[1], { steps: 3 });
+    await page.mouse.up();
+  }
+  wonByHand = await page.evaluate(() => window.__tangram.board.solved && !window.__tangram.board.gaveUp);
+  ok(wonByHand, `${catId} Nr. ${n}: per Maus (mit Einrasten) von Hand gelöst`);
+  await page.waitForTimeout(1200);
+  ok(await page.locator('#win').isVisible(), `${catId}: Gewinn-Karte erscheint nach Handlösung`);
+  await snap(`06b-hand-${catId}`);
+}
 
 // Galerie + Live-Variante (außerhalb der gebackenen Varianten)
 await page.evaluate(() => window.__tangram.selectCategory('tiere', 0n));

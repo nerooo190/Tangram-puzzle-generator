@@ -148,3 +148,5 @@ kbd { background: var(--bg); border: 1px solid var(--line); border-bottom-width:
   .board-wrap { min-height: 52vh; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.notice { background: #fff3cd; color: #5c4400; border: 1px solid #ffe08a; border-radius: 10px; padding: 8px 12px; font-size: 13px; }

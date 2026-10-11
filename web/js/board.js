@@ -1,7 +1,7 @@
 // Spielbrett (SVG): Silhouette, Teile ziehen / drehen / spiegeln, Einrasten, Tipp, Lösung, Gewinnprüfung.
 
 import {
-  TYPES, placementVerts, polyCentroid, mapPlacement, rotPt, bbox, round6, linearMap,
+  TYPES, placementVerts, polyCentroid, mapPlacement, rotPt, bbox, round6,
 } from './core/geom.js';
 import { fillPoly } from './core/raster.js';
 
@@ -80,7 +80,7 @@ export class Board {
   }
 
   // ---- Anordnung der Teile ---------------------------------------------------------
-  #scatter(seedPls) {
+  #scatter() {
     const bb = bbox(this.solPolys);
     const W = bb[2] - bb[0], Hh = bb[3] - bb[1];
     const rect = this.svg.getBoundingClientRect();
@@ -122,7 +122,6 @@ export class Board {
     const pad = 1.2;
     this.view = [b[0] - pad, b[1] - pad, b[2] - b[0] + 2 * pad, b[3] - b[1] + 2 * pad];
     this.svg.setAttribute('viewBox', this.view.join(' '));
-    this.svg.style.setProperty('--u', `${1}`);
     this.#fixStroke();
   }
 
@@ -224,10 +223,17 @@ export class Board {
     const anchors = [];
     for (const v of this.solPolys) for (const q of v) anchors.push(q);
     for (const o of this.pieces) if (o !== p) for (const q of o.verts) anchors.push(q);
-    let best = null, bd = SNAP;
+    // Verschiebung wählen, bei der die meisten Ecken des Teils zugleich auf Ankerpunkte fallen;
+    // bei Gleichstand die kürzeste. (Nur das nächste Eckenpaar zu nehmen, rastet bei dichten Ecken falsch ein.)
+    let best = null, bestScore = 0, bestDist = Infinity;
     for (const v of p.verts) for (const a of anchors) {
-      const d = Math.hypot(a[0] - v[0], a[1] - v[1]);
-      if (d < bd) { bd = d; best = [a[0] - v[0], a[1] - v[1]]; }
+      const tx = a[0] - v[0], ty = a[1] - v[1], d = Math.hypot(tx, ty);
+      if (d >= SNAP) continue;
+      let score = 0;
+      for (const w of p.verts) {
+        for (const a2 of anchors) if (Math.hypot(w[0] + tx - a2[0], w[1] + ty - a2[1]) < 0.03) { score++; break; }
+      }
+      if (score > bestScore || (score === bestScore && d < bestDist)) { best = [tx, ty]; bestScore = score; bestDist = d; }
     }
     if (best) {
       p.pl = [p.pl[0], p.pl[1], p.pl[2], round6(p.pl[3] + best[0]), round6(p.pl[4] + best[1])];
@@ -321,4 +327,3 @@ export class Board {
   rotationOfSelected() { return this.sel ? this.sel.pl[1] : null; }
 }
 
-export { linearMap };

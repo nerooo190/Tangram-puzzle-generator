@@ -1,7 +1,12 @@
 // Scanline-Rasterung konvexer Polygone auf ein Zellgitter (Zellmitte zählt, halboffen).
 
-/** Trägt die Zellen eines Polygons in grid (Uint8Array W*Hh) ein. Zelle (i,j): Mitte (x0+(i+.5)c, y0+(j+.5)c). */
-export function fillPoly(grid, v, x0, y0, c, W, Hh) {
+// Versatz des Abtastrasters (Bruchteil einer Zelle): verhindert, dass Kanten genau durch Zellmitten laufen
+// (45°-Kanten tun das sonst oft) und Rundungsrauschen dann Lücken oder Doppeltreffer erzeugt.
+export const JITTER_X = 0.0371, JITTER_Y = 0.0229;
+
+/** Trägt die Zellen eines Polygons in grid (Uint8Array W*Hh) ein. Zelle (i,j): Mitte (x0+(i+.5+jx)c, y0+(j+.5+jy)c). */
+export function fillPoly(grid, v, x0, y0, c, W, Hh, jx = JITTER_X, jy = JITTER_Y) {
+  x0 += jx * c; y0 += jy * c;
   let ymin = Infinity, ymax = -Infinity;
   for (const p of v) { if (p[1] < ymin) ymin = p[1]; if (p[1] > ymax) ymax = p[1]; }
   let j0 = Math.ceil((ymin - y0) / c - 0.5), j1 = Math.ceil((ymax - y0) / c - 0.5) - 1;
@@ -24,8 +29,12 @@ export function fillPoly(grid, v, x0, y0, c, W, Hh) {
   }
 }
 
-/** Gibt true zurück, wenn die Vereinigung der Polygone eingeschlossene Löcher hat. */
+/** true, wenn die Vereinigung der Polygone eingeschlossene Löcher hat (Test mit zwei Rasterversätzen). */
 export function hasHole(polys, c = 0.1) {
+  return holeAt(polys, c, JITTER_X, JITTER_Y) && holeAt(polys, c, 0.3113, 0.4417);
+}
+
+function holeAt(polys, c, jx, jy) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const v of polys) for (const p of v) {
     if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
@@ -34,7 +43,7 @@ export function hasHole(polys, c = 0.1) {
   x0 -= 2 * c; y0 -= 2 * c; x1 += 2 * c; y1 += 2 * c;
   const W = Math.ceil((x1 - x0) / c), Hh = Math.ceil((y1 - y0) / c);
   const g = new Uint8Array(W * Hh);
-  for (const v of polys) fillPoly(g, v, x0, y0, c, W, Hh);
+  for (const v of polys) fillPoly(g, v, x0, y0, c, W, Hh, jx, jy);
   // Flood-Fill des Außenbereichs
   const seen = new Uint8Array(W * Hh);
   const stack = [0];

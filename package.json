@@ -1,0 +1,15 @@
+{
+  "name": "tangram-puzzle-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unbegrenzt viele Tangram-Puzzles – Web-App und Godot-Bibliothek",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 -d web",
+    "test": "node tools/test-core.mjs",
+    "e2e": "node tools/e2e.mjs",
+    "godot-tests": "tools/godot-tests.sh",
+    "bake": "node tools/bake.mjs --restarts=40 --iters=25000 --topk=12",
+    "space": "node tools/space-estimate.mjs"
+  }
+}

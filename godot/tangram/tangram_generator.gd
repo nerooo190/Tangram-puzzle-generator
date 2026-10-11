@@ -46,22 +46,32 @@ static func _build_once(rng: TangramRng, types: Array, style: String) -> Array:
 	var placed := [{"pl": first, "v": G.placement_verts(first)}]
 	for i in range(1, order.size()):
 		var best := {}
-		var best_score := -INF
-		for k in int(st["k"]):
-			var c := G.sample_attach(placed, int(order[i]), rng, 60)
-			if c.is_empty():
-				continue
-			if int(st["k"]) == 1:
-				best = c
-				break
-			var vs := []
-			for p in placed:
-				vs.append(p["v"])
-			vs.append(c["v"])
-			var s := _score(st["mode"], vs)
-			if s > best_score:
-				best_score = s
-				best = c
+		if int(st["k"]) == 1:
+			best = G.sample_attach(placed, int(order[i]), rng, 60)
+		else:
+			var cands := []
+			for k in int(st["k"]):
+				var c := G.sample_attach(placed, int(order[i]), rng, 60)
+				if c.is_empty():
+					continue
+				var vs := []
+				for p in placed:
+					vs.append(p["v"])
+				vs.append(c["v"])
+				cands.append({"c": c, "s": _score(st["mode"], vs)})
+			# die drei besten Kandidaten (erster gewinnt bei Gleichstand), daraus zufällig wählen
+			var ranked := []
+			var r := 0
+			while r < 3 and not cands.is_empty():
+				var bi := 0
+				for j in range(1, cands.size()):
+					if float(cands[j]["s"]) > float(cands[bi]["s"]):
+						bi = j
+				ranked.append(cands[bi])
+				cands.remove_at(bi)
+				r += 1
+			if not ranked.is_empty():
+				best = ranked[rng.int_(ranked.size())]["c"]
 		if best.is_empty():
 			return []
 		placed.append({"pl": best["pl"], "v": best["v"]})
@@ -117,10 +127,10 @@ static func _map_all(pls: Array, k: int, m: int, ux: float, uy: float) -> Array:
 	return out
 
 
-## Muster: "spiegel" (14 Teile), "vier" (28 Teile), "punkt" (14 Teile).
-static func generate_pattern(seed_text: String, kind: String = "spiegel") -> Array:
+## Muster: "spiegel" (2x), "vier" (4x), "punkt" (2x) so viele Teile wie die Grundfigur (7 * base_sets).
+static func generate_pattern(seed_text: String, kind: String = "spiegel", base_sets: int = 1) -> Array:
 	var rng := TangramRng.new(seed_text)
-	var types := G.kit_types(1)
+	var types := G.kit_types(base_sets)
 	var style_names := ["frei", "kompakt", "lang"]
 	for attempt in 300:
 		var base := _build_once(rng, types, style_names[rng.int_(3)])

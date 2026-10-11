@@ -3,6 +3,7 @@ import { Board, COLORS } from './board.js';
 import { placementVerts, bbox } from './core/geom.js';
 import { glyphToMask, splitGlyphs } from './glyph.js';
 import { maskToJson } from './core/mask.js';
+import { PATTERNS } from './core/generate.js';
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -22,7 +23,7 @@ const BIG = 1000000000000000000000n;
 const GAL = 12;
 const state = { cat: null, n: 0n, sets: 1, token: 0, galOpen: false, puzzle: null };
 let solved = new Set(store.get('tangram.solved.v1', []));
-let timerId = null, timerStart = 0;
+let timerId = null, timerStart = 0, winTimer = null;
 
 // ---------------------------------------------------------------- Kategorien
 function renderCategories() {
@@ -55,11 +56,17 @@ function renderCategories() {
   }
 }
 
+/** Beschriftet die Teile-Auswahl: bei Mustern ist die Teilezahl ein Vielfaches der Grundfigur. */
+function updateSetsLabels(cat) {
+  const mult = cat.group === 'pattern' ? PATTERNS[cat.pattern].mult : 1;
+  for (const o of $('setsSel').options) o.textContent = String(7 * Number(o.value) * mult);
+}
+
 function selectCategory(id, n = 0n) {
   const cat = service.category(id) || service.category('alle') || service.categories()[0];
   state.cat = cat;
   $('catIcon').textContent = cat.icon; $('catName').textContent = cat.name;
-  $('setsWrap').hidden = cat.group === 'pattern';
+  updateSetsLabels(cat);
   renderCategories();
   go(n);
 }
@@ -123,9 +130,11 @@ function onSolved(r) {
   if (r.gaveUp) parts.push('Lösung angezeigt');
   else parts.push(`Zeit ${clock(r.ms)}`, `${r.moves} Züge`, r.hints ? `${r.hints} Tipp${r.hints > 1 ? 's' : ''}` : 'ohne Tipp');
   $('winText').textContent = parts.join(' · ');
-  setTimeout(() => { $('win').hidden = false; $('winNext').focus(); }, 650);
+  const tok = state.token;
+  clearTimeout(winTimer);
+  winTimer = setTimeout(() => { if (tok === state.token) { $('win').hidden = false; $('winNext').focus(); } }, 650);
 }
-function hideWin() { $('win').hidden = true; }
+function hideWin() { clearTimeout(winTimer); $('win').hidden = true; }
 function updateSolvedCount() { $('solvedCount').textContent = `✓ ${solved.size}`; }
 
 // ---------------------------------------------------------------- Galerie
@@ -296,7 +305,6 @@ function wire() {
   $('menuBtn').addEventListener('click', () => { $('side').classList.add('open'); $('scrim').hidden = false; });
   $('scrim').addEventListener('click', closeMenu);
   window.addEventListener('hashchange', () => { const t = parseHash(); if (t && (t.c !== state.cat.id || t.n !== state.n || t.s !== state.sets)) applyTarget(t); });
-  window.addEventListener('resize', () => {});
   window.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || document.querySelector('dialog[open]')) return;
@@ -329,6 +337,14 @@ function applyTarget(t) {
 
 async function main() {
   await service.load();
+  if (!service.packs.length) {
+    const msg = location.protocol === 'file:'
+      ? 'Bitte über einen Webserver öffnen (z. B. „python3 -m http.server -d web“), nicht per Doppelklick – sonst fehlen die Formen-Pakete.'
+      : 'Die Formen-Pakete konnten nicht geladen werden. Abstrakte Kategorien und Muster funktionieren trotzdem.';
+    const b = document.createElement('div');
+    b.className = 'notice'; b.textContent = msg;
+    document.querySelector('.main').prepend(b);
+  }
   wire();
   updateSolvedCount();
   const t = parseHash() || (() => { const l = store.get('tangram.last', null); return l ? { c: l.c, n: BigInt(l.n), s: l.s } : { c: 'alle', n: 0n, s: 1 }; })();

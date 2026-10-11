@@ -70,6 +70,23 @@ export function expNeg(x) {
   return t;
 }
 
+function powInt(x, m) {
+  let r = 1, b = x;
+  while (m > 0) { if (m & 1) r *= b; b *= b; m >>= 1; }
+  return r;
+}
+
+/** r mit r^m = t1/t0 (nur Multiplikationen/Vergleiche -> plattformunabhängig identisch). */
+export function geoRatio(t0, t1, m) {
+  const target = t1 / t0;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (powInt(mid, m) > target) hi = mid; else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 function centroidOf(polys) {
   let A = 0, cx = 0, cy = 0;
   for (const v of polys) {
@@ -152,7 +169,7 @@ function anneal(T, types, rng, iters, t0, t1) {
   let cA = centroidOf(S.vs);
   let cur = evalIoU(T, S.vs, g, 0, 0, cA);
   let best = { S, g, iou: cur };
-  const ratio = Math.pow(t1 / t0, 1 / Math.max(1, iters - 1));
+  const ratio = geoRatio(t0, t1, Math.max(1, iters - 1));
   let temp = t0;
   for (let it = 0; it < iters; it++, temp *= ratio) {
     const r = rng.float();

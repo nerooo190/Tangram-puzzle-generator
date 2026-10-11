@@ -3,7 +3,14 @@ extends RefCounted
 ## Scanline-Rasterung konvexer Polygone (Port von web/js/core/raster.js).
 
 
-static func fill_poly(grid: PackedByteArray, v: Array, x0: float, y0: float, c: float, W: int, Hh: int) -> void:
+const JITTER_X := 0.0371
+const JITTER_Y := 0.0229
+
+
+## Versatz des Abtastrasters (Bruchteil einer Zelle): verhindert, dass 45°-Kanten genau durch Zellmitten laufen.
+static func fill_poly(grid: PackedByteArray, v: Array, x0_in: float, y0_in: float, c: float, W: int, Hh: int, jx: float = JITTER_X, jy: float = JITTER_Y) -> void:
+	var x0 := x0_in + jx * c
+	var y0 := y0_in + jy * c
 	var ymin := INF
 	var ymax := -INF
 	for p in v:
@@ -35,8 +42,12 @@ static func fill_poly(grid: PackedByteArray, v: Array, x0: float, y0: float, c: 
 			grid[j * W + i] = 1
 
 
-## true, wenn die Vereinigung der Polygone eingeschlossene Löcher hat.
+## true, wenn die Vereinigung der Polygone eingeschlossene Löcher hat (Test mit zwei Rasterversätzen).
 static func has_hole(polys: Array, c: float = 0.1) -> bool:
+	return _hole_at(polys, c, JITTER_X, JITTER_Y) and _hole_at(polys, c, 0.3113, 0.4417)
+
+
+static func _hole_at(polys: Array, c: float, jx: float, jy: float) -> bool:
 	var x0 := INF
 	var y0 := INF
 	var x1 := -INF
@@ -56,7 +67,7 @@ static func has_hole(polys: Array, c: float = 0.1) -> bool:
 	var g := PackedByteArray()
 	g.resize(W * Hh)
 	for v in polys:
-		fill_poly(g, v, x0, y0, c, W, Hh)
+		fill_poly(g, v, x0, y0, c, W, Hh, jx, jy)
 	var seen := PackedByteArray()
 	seen.resize(W * Hh)
 	var stack := [0]
