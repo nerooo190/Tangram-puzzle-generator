@@ -69,6 +69,11 @@ export class Service {
   }
 
   async load() {
+    if (window.__TANGRAM_PACKS__) {   // Einzeldatei-Build (Artifact): Pakete sind eingebettet
+      this.packs = window.__TANGRAM_PACKS__.map((p) => this.#prepPack(p));
+      this.#loadCustom();
+      return;
+    }
     try {
       const idx = await (await fetch('data/packs/index.json')).json();
       this.packs = await Promise.all(idx.map(async (e) => {
@@ -171,7 +176,9 @@ export class Service {
 
   #solve(mask, sets, seed, topK = 1, quality = { restarts: 10, iters: 14000 }) {
     if (!this.worker) {
-      this.worker = new Worker(new URL('./fit.worker.js', import.meta.url), { type: 'module' });
+      this.worker = window.__TANGRAM_WORKER_SRC__
+        ? new Worker(URL.createObjectURL(new Blob([window.__TANGRAM_WORKER_SRC__], { type: 'text/javascript' })))
+        : new Worker(new URL('./fit.worker.js', import.meta.url), { type: 'module' });
       this.worker.onmessage = (e) => {
         const { id, sols, error } = e.data;
         const p = this.pending.get(id);

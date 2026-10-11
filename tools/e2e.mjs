@@ -81,7 +81,7 @@ const r1 = await page.evaluate(() => window.__tangram.board.sel.pl[1]);
 ok(((r0 + 1) % 8) === r1, 'Taste R dreht um 45°');
 await snap('05-play');
 ok(await page.evaluate(() => window.__tangram.board.hint()), 'Tipp liefert Geisterteil');
-page.once('dialog', (d) => d.accept());
+await page.click('#solveBtn');
 await page.click('#solveBtn');
 await page.waitForTimeout(1200);
 ok(await page.locator('#win').isVisible(), 'Gewinn-Anzeige nach Lösung');
@@ -178,12 +178,10 @@ await snap('09-custom');
   await page.waitForTimeout(600);
   ok(await page.evaluate(() => window.__xss === undefined) && await page.locator('#galGrid img').count() === 0, 'Import: HTML im Glyph wird nicht ausgeführt');
   await page.click('#galBtn');
-  let alerted = false;
-  page.once('dialog', (d) => { alerted = true; d.accept(); });
   const bad = { format: 'tangram-pack/1', id: 'bad', name: 'bad', figures: [{ id: 'b', name: 'b', glyph: 'b', mask: { w: 100000, h: 100000, c: 1, bits: 'AAAA' } }] };
   await page.setInputFiles('#importFile', { name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
   await page.waitForTimeout(500);
-  ok(alerted && (await page.evaluate(() => window.__tangram.service.category('bad'))) === undefined, 'Import: ungültiges Paket wird abgelehnt');
+  ok(await page.locator('#toast').isVisible() && (await page.evaluate(() => window.__tangram.service.category('bad'))) === undefined, 'Import: ungültiges Paket wird abgelehnt');
 }
 
 // Mobil

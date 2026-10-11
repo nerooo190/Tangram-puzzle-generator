@@ -19,6 +19,22 @@ const board = new Board($('board'), {
   onSolved: onSolved,
 });
 
+let toastTimer = null;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+}
+
+/** Zweistufige Bestätigung im Seitenkontext (alert/confirm gibt es im Artifact nicht). */
+function confirmTwice(btn, label, action) {
+  if (btn.dataset.armed) { clearTimeout(Number(btn.dataset.armed)); delete btn.dataset.armed; btn.textContent = btn.dataset.orig; action(); return; }
+  btn.dataset.orig = btn.textContent;
+  btn.textContent = label;
+  btn.dataset.armed = String(setTimeout(() => { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; }, 3000));
+}
+
 const BIG = 1000000000000000000000n;
 const GAL = 12;
 const state = { cat: null, n: 0n, sets: 1, token: 0, galOpen: false, puzzle: null };
@@ -73,7 +89,7 @@ function selectCategory(id, n = 0n) {
 
 // ---------------------------------------------------------------- Navigation
 function writeHash() {
-  history.replaceState(null, '', `#${state.cat.id}/${state.n}/${state.sets}`);
+  try { history.replaceState(null, '', `#${state.cat.id}/${state.n}/${state.sets}`); } catch { /* eingebettet: nicht erlaubt */ }
   store.set('tangram.last', { c: state.cat.id, n: String(state.n), s: state.sets });
 }
 
@@ -196,7 +212,7 @@ function openCatDialog(cat) {
   $('catIconInp').value = cat ? cat.icon : '';
   $('catGlyphs').value = cat ? cat.figures.map((f) => f.glyph).join('\n') : '';
   $('catMsg').textContent = '';
-  $('catExport').hidden = !cat; $('catDelete').hidden = !cat;
+  $('catExport').hidden = !cat; $('catDelete').hidden = !cat; $('catJson').hidden = true; $('catCopy').hidden = true;
   $('catDlg').showModal();
 }
 
@@ -222,7 +238,7 @@ async function saveCategory(ev) {
   service.addCustom({ format: 'tangram-pack/1', id, name, icon: $('catIconInp').value.trim() || '⭐', figures });
   $('catDlg').close();
   selectCategory(id, 0n);
-  if (failed.length) alert(`Nicht darstellbar (übersprungen): ${failed.join(' ')}`);
+  if (failed.length) toast(`Nicht darstellbar (übersprungen): ${failed.join(' ')}`);
 }
 
 async function exportCategory() {
@@ -241,11 +257,17 @@ async function exportCategory() {
     figures.push({ id: f.id, name: f.name, glyph: f.glyph, mask: f.mask, sols });
   }
   const pack = { format: 'tangram-pack/1', id: cat.id, name: cat.name, icon: cat.icon, figures };
-  const blob = new Blob([JSON.stringify(pack)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `tangram-pack-${slug(cat.name)}.json`;
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  $('catMsg').textContent = 'Paket gespeichert – auch für die Godot-Version nutzbar.';
+  const json = JSON.stringify(pack);
+  if (window.__TANGRAM_PACKS__) {
+    // Einzeldatei-Build (Artifact): Downloads sind dort gesperrt -> Paket als kopierbarer Text
+    $('catJson').value = json; $('catJson').hidden = false; $('catCopy').hidden = false;
+    $('catMsg').textContent = 'Paket fertig. Kopiere den Text und speichere ihn als .json-Datei (auch für Godot nutzbar).';
+  } else {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = `tangram-pack-${slug(cat.name)}.json`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    $('catMsg').textContent = 'Paket gespeichert – auch für die Godot-Version nutzbar.';
+  }
   $('catExport').disabled = false;
 }
 
@@ -256,7 +278,7 @@ async function importPack(file) {
     const id = service.categories().some((c) => c.id === pack.id && !c.custom) ? `imp-${pack.id}` : pack.id;
     service.addCustom({ ...pack, id });
     selectCategory(id, 0n);
-  } catch (e) { alert(`Import fehlgeschlagen: ${e.message}`); }
+  } catch (e) { toast(`Import fehlgeschlagen: ${e.message}`); }
 }
 
 // ---------------------------------------------------------------- Menü (mobil)
@@ -289,16 +311,20 @@ function wire() {
   $('flipBtn').addEventListener('click', () => board.flip());
   $('hintBtn').addEventListener('click', () => board.hint());
   $('shuffleBtn').addEventListener('click', () => board.shuffle());
-  $('solveBtn').addEventListener('click', () => { if (confirm('Lösung anzeigen?')) board.showSolution(); });
+  $('solveBtn').addEventListener('click', (e) => confirmTwice(e.currentTarget, '👁 Wirklich zeigen?', () => board.showSolution()));
   $('winNext').addEventListener('click', () => go(state.n + 1n));
   $('winClose').addEventListener('click', hideWin);
   $('newCatBtn').addEventListener('click', () => openCatDialog(null));
   $('catForm').addEventListener('submit', saveCategory);
   $('catCancel').addEventListener('click', () => $('catDlg').close());
   $('catExport').addEventListener('click', exportCategory);
-  $('catDelete').addEventListener('click', () => {
-    if (editing && confirm(`Kategorie „${editing.name}“ löschen?`)) { service.removeCustom(editing.id); $('catDlg').close(); selectCategory('alle', 0n); }
+  $('catCopy').addEventListener('click', async () => {
+    const t = $('catJson');
+    try { await navigator.clipboard.writeText(t.value); toast('Paket kopiert'); } catch { t.select(); toast('Text markiert – mit Strg/Cmd+C kopieren'); }
   });
+  $('catDelete').addEventListener('click', (e) => confirmTwice(e.currentTarget, 'Sicher löschen?', () => {
+    if (editing) { service.removeCustom(editing.id); $('catDlg').close(); selectCategory('alle', 0n); }
+  }));
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) importPack(e.target.files[0]); e.target.value = ''; });
   $('helpBtn').addEventListener('click', () => $('helpDlg').showModal());
